@@ -1,0 +1,24 @@
+{
+  "name": "ChunkedValueManifest",
+  "namespace": "com.linkedin.venice.storage.protocol",
+  "doc": "This record maintains chunking information in order to re-assemble a value that was split in many chunks. The version of this schema is intentionally set to -1 because this is what will be used in the schema part of the value field, representing a special system-type schema, as opposed to a user-defined schema.",
+  "type": "record",
+  "fields": [
+    {
+      "name": "keysWithChunkIdSuffix",
+      "doc": "list of keys associated to all chunks. These are encoded with key + ChunkedKeySuffix appended at the end.",
+      "type": {
+        "type": "array",
+        "items": "bytes"
+      }
+    }, {
+      "name": "schemaId",
+      "doc": "An identifier used to determine how the full value (after chunk re-assembly) can be deserialized. This is the ID of the user-defined schema.",
+      "type": "int"
+    }, {
+      "name": "size",
+      "doc": "The number of bytes of the entire value, once all chunks are assembled.",
+      "type": "int"
+    }
+  ]
+}

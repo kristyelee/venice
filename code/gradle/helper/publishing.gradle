@@ -1,0 +1,42 @@
+ext.publishing = [
+    configureArtifactPublishing: { currentProject, testJar ->
+      if (currentProject.version != project.DEFAULT_VERSION) {
+        println "Will publish ${currentProject.path} at ${currentProject.group}:${currentProject.name}:${currentProject.version}"
+
+        publishing {
+          publications {
+            "${currentProject.name}" (MavenPublication) {
+              groupId currentProject.group
+              artifactId currentProject.name
+              version currentProject.version
+
+              from currentProject.components.java
+
+              artifact testJar
+
+              //we strive to meet https://central.sonatype.org/pages/requirements.html
+              pom {
+                name = 'Venice'
+                description = 'Derived Data Platform for planet-scale workloads'
+                url = 'https://github.com/linkedin/venice'
+
+                licenses {
+                  license {
+                    name = 'BSD 2-Clause'
+                    url = 'https://raw.githubusercontent.com/linkedin/venice/main/LICENSE'
+                  }
+                }
+                scm {
+                  connection = 'scm:git:git://github.com:linkedin/venice.git'
+                  developerConnection = 'scm:git:ssh://github.com:linkedin/venice.git'
+                  url = 'https://github.com/linkedin/venice'
+                }
+              }
+            }
+          }
+
+          //repositories inherited from parent build.gradle
+        }
+      }
+    }
+]

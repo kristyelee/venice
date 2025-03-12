@@ -1,0 +1,46 @@
+dependencies {
+  // For helix-based metadata impl, and this will be removed before onboarding any customers.
+  implementation project(':internal:venice-common')
+
+  implementation('org.apache.helix:helix-core:1.4.1:jdk8') {
+    exclude group: 'org.apache.helix'
+  }
+  implementation('org.apache.helix:helix-common:1.4.1:jdk8')  {
+    exclude group: 'org.apache.helix'
+  }
+  implementation('org.apache.helix:zookeeper-api:1.4.1:jdk8') {
+    exclude group: 'org.apache.helix'
+  }
+  implementation('org.apache.helix:metadata-store-directory-common:1.4.1:jdk8') {
+    exclude group: 'org.apache.helix'
+  }
+  implementation('org.apache.helix:metrics-common:1.4.1:jdk8')
+
+  implementation project(':clients:da-vinci-client')
+  implementation project(':services:venice-router')
+  implementation project(':internal:venice-client-common')
+  implementation project(':clients:venice-thin-client')
+  implementation project(':internal:alpini:common:alpini-common-base')
+  implementation project(':internal:alpini:router:alpini-router-api')
+
+  implementation libraries.fastUtil
+  implementation libraries.restliCommon
+  implementation libraries.r2
+
+  testImplementation project(':internal:venice-client-common')
+  testImplementation project(':internal:venice-client-common').sourceSets.test.output
+  testImplementation project(':internal:venice-common')
+  testImplementation project(':internal:venice-test-common')
+  testImplementation libraries.kafkaClients
+}
+
+ext {
+  jacocoCoverageThreshold = 0.53
+}
+
+checkerFramework {
+  extraJavacArgs = ['-Xmaxerrs', '256']
+  checkers = ['org.checkerframework.checker.nullness.NullnessChecker']
+  skipCheckerFramework = true
+  excludeTests = true
+}
