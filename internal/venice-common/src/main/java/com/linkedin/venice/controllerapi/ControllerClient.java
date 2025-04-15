@@ -1227,6 +1227,15 @@ public class ControllerClient implements Closeable {
     return request(ControllerRoute.REPUSH_STORE, params, RepushJobResponse.class);
   }
 
+  public MultiStoreInfoResponse getDeadStores(
+      String clusterName,
+      boolean includeSystemStores,
+      Optional<String> storeName) {
+    QueryParams params = newParams().add(CLUSTER, clusterName).add(INCLUDE_SYSTEM_STORES, includeSystemStores);
+    storeName.ifPresent(s -> params.add(NAME, s));
+    return request(ControllerRoute.GET_DEAD_STORES, params, MultiStoreInfoResponse.class);
+  }
+
   public VersionResponse getStoreLargestUsedVersion(String clusterName, String storeName) {
     QueryParams params = newParams().add(CLUSTER, clusterName).add(NAME, storeName);
     return request(ControllerRoute.GET_STORE_LARGEST_USED_VERSION, params, VersionResponse.class);
@@ -1410,6 +1419,23 @@ public class ControllerClient implements Closeable {
     QueryParams params =
         newParams().add(CLUSTER, clusterName).add(ADMIN_OPERATION_PROTOCOL_VERSION, adminOperationProtocolVersion);
     return request(ControllerRoute.UPDATE_ADMIN_OPERATION_PROTOCOL_VERSION, params, AdminTopicMetadataResponse.class);
+  }
+
+  public AdminOperationProtocolVersionControllerResponse getAdminOperationProtocolVersionFromControllers(
+      String clusterName) {
+    QueryParams params = newParams().add(CLUSTER, clusterName);
+    return request(
+        ControllerRoute.GET_ADMIN_OPERATION_VERSION_FROM_CONTROLLERS,
+        params,
+        AdminOperationProtocolVersionControllerResponse.class);
+  }
+
+  public AdminOperationProtocolVersionControllerResponse getLocalAdminOperationProtocolVersion() {
+    // TODO: Modify this method to send to given controller url
+    return request(
+        ControllerRoute.GET_LOCAL_ADMIN_OPERATION_PROTOCOL_VERSION,
+        newParams(),
+        AdminOperationProtocolVersionControllerResponse.class);
   }
 
   public ControllerResponse deleteKafkaTopic(String topicName) {
