@@ -5,19 +5,23 @@ package com.linkedin.venice.kuzudb;
 import com.linkedin.davinci.client.DaVinciRecordTransformer;
 import com.linkedin.davinci.client.DaVinciRecordTransformerConfig;
 import com.linkedin.davinci.client.DaVinciRecordTransformerResult;
+import com.linkedin.venice.exceptions.VeniceException;
 import com.linkedin.venice.sql.AvroToSQL;
 import com.linkedin.venice.sql.PreparedStatementProcessor;
 import com.linkedin.venice.sql.SQLUtils;
 import com.linkedin.venice.utils.concurrent.CloseableThreadLocal;
 import com.linkedin.venice.utils.lazy.Lazy;
 import java.io.IOException;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.Set;
 import javax.annotation.Nonnull;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.sparkproject.jetty.client.api.Connection;
 
 
 public class KuzuDBDaVinciRecordTransformer
@@ -30,7 +34,7 @@ public class KuzuDBDaVinciRecordTransformer
   private final String versionTableName;
   private final String kuzuDBUrl;
   private final Set<String> columnsToProject;
-  // private final CloseableThreadLocal<Connection> connection;
+  private final CloseableThreadLocal<Connection> connection;
   private final CloseableThreadLocal<PreparedStatement> deleteCypherPreparedStatement;
   private final CloseableThreadLocal<PreparedStatement> upsertCypherPreparedStatement;
   private final PreparedStatementProcessor upsertCypherProcessor;
@@ -54,32 +58,32 @@ public class KuzuDBDaVinciRecordTransformer
     this.columnsToProject = columnsToProject;
     this.deleteStatement = deleteStatementInCypher(versionTableName, keySchema);
     this.upsertStatement = upsertStatementInCypher(versionTableName, keySchema, inputValueSchema, columnsToProject);
-    // this.connection = CloseableThreadLocal.withInitial(() -> {
-    // return null;
-    // try {
-    // // TODO: Find out how KuzuDB is connected and faciliates connection;
-    // Database db = new Database(":memory");
-    // Connection conn = new Connection(db);
-    // return conn;
-    // return DriverManager.getConnection(kuzuDBUrl);
-    // } catch (SQLException e) {
-    // throw new VeniceException("Failed to connect to DB!", e);
-    // }
-    // });
-    // this.deleteCypherPreparedStatement = CloseableThreadLocal.withInitial(() -> {
-    // try {
-    // return this.connection.get().prepareStatement(deleteStatement);
-    // } catch (SQLException e) {
-    // throw new VeniceException("Failed to create PreparedStatement for: " + deleteStatement, e);
-    // }
-    // });
-    // this.upsertCypherPreparedStatement = CloseableThreadLocal.withInitial(() -> {
-    // try {
-    // return this.connection.get().prepareStatement(upsertStatement);
-    // } catch (SQLException e) {
-    // throw new VeniceException("Failed to create PreparedStatement for: " + upsertStatement, e);
-    // }
-    // });
+    this.connection = CloseableThreadLocal.withInitial(() -> {
+      return null;
+      // try {
+      // // TODO: Find out how KuzuDB is connected and faciliates connection;
+      // Database db = new Database(":memory");
+      // Connection conn = new Connection(db);
+      // return conn;
+      // return DriverManager.getConnection(kuzuDBUrl);
+      // } catch (SQLException e) {
+      // throw new VeniceException("Failed to connect to DB!", e);
+      // }
+    });
+    this.deleteCypherPreparedStatement = CloseableThreadLocal.withInitial(() -> {
+      try {
+        return this.connection.get().prepareStatement(deleteStatement);
+      } catch (SQLException e) {
+        throw new VeniceException("Failed to create PreparedStatement for: " + deleteStatement, e);
+      }
+    });
+    this.upsertCypherPreparedStatement = CloseableThreadLocal.withInitial(() -> {
+      try {
+        return this.connection.get().prepareStatement(upsertStatement);
+      } catch (SQLException e) {
+        throw new VeniceException("Failed to create PreparedStatement for: " + upsertStatement, e);
+      }
+    });
     this.upsertCypherProcessor = AvroToSQL.upsertProcessor(keySchema, inputValueSchema, columnsToProject);
     this.deleteCypherProcessor = AvroToSQL.deleteProcessor(keySchema);
   }
