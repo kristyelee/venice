@@ -84,6 +84,7 @@ ext.libraries = [
     conscrypt: 'org.conscrypt:conscrypt-openjdk-uber:2.5.2',
     d2: "com.linkedin.pegasus:d2:${pegasusVersion}",
     duckdbJdbc: "org.duckdb:duckdb_jdbc:1.2.0",
+    kuzudb: 'com.kuzudb:kuzu:0.9.0',
     failsafe: 'net.jodah:failsafe:2.4.0',
     fastUtil: 'it.unimi.dsi:fastutil:8.3.0',
     grpcNettyShaded: "io.grpc:grpc-netty-shaded:${grpcVersion}",
@@ -620,7 +621,7 @@ spotless {
   ratchetFrom "${git.getUpstreamRemote()}/main"
   java {
     importOrder()
-    removeUnusedImports()
+//    removeUnusedImports()
     eclipse().configFile("$rootDir/gradle/spotless/eclipse-java-formatter.xml")
     target '**/src/**/*.java'
     targetExclude '**/generated/**'

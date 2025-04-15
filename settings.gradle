@@ -74,3 +74,6 @@ include 'tests:venice-pulsar-test'
 
 // Depend-all module
 include 'all-modules'
+include 'integrations:venice-kuzudb'
+findProject(':integrations:venice-kuzudb')?.name = 'venice-kuzudb'
+
