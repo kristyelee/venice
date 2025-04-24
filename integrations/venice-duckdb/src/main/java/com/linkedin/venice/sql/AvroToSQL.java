@@ -133,6 +133,48 @@ public class AvroToSQL {
   }
 
   @Nonnull
+  public static String upsertStatementInCypher(
+      @Nonnull String tableName,
+      @Nonnull Schema keySchema,
+      @Nonnull Schema valueSchema,
+      @Nonnull Set<String> columnsToProject) {
+
+    boolean is_node = keySchema.getFields().size() == 1;
+
+    Set<Schema.Field> allColumns = combineColumns(keySchema, valueSchema, columnsToProject);
+    StringBuffer stringBuffer = new StringBuffer();
+
+    if (is_node) {
+      // MERGE (n:User {name : 'Adam'}) SET n.age = 35
+
+      boolean firstColumn = true;
+      for (Schema.Field field: allColumns) {
+        JDBCType correspondingType = getCorrespondingType(field);
+        if (correspondingType == null) {
+          // Skipped field.
+          continue;
+        }
+
+        if (firstColumn) {
+          // MERGE (n:User {name : 'Adam'})
+          stringBuffer.append("MERGE (n: " + SQLUtils.cleanTableName(tableName) + " { " + field.name() + ": ? }) ");
+          firstColumn = false;
+        } else {
+          // SET n.age = 35
+          stringBuffer.append("SET n." + field.name() + " ? ");
+        }
+      }
+      stringBuffer.append(";");
+    } else {
+      // MATCH (a:User), (b:User)
+      // WHERE a.name = 'Adam' AND b.name = 'Zhang'
+      // MERGE (a)-[e:Follows]->(b) SET e.since = 2022;
+    }
+
+    return stringBuffer.toString();
+  }
+
+  @Nonnull
   public static PreparedStatementProcessor upsertProcessor(
       @Nonnull Schema keySchema,
       @Nonnull Schema valueSchema,
@@ -164,6 +206,66 @@ public class AvroToSQL {
       stringBuffer.append(" = ?");
     }
     stringBuffer.append(";");
+
+    return stringBuffer.toString();
+  }
+
+  @Nonnull
+  public static String deleteStatementInCypher(@Nonnull String tableName, @Nonnull Schema keySchema) {
+    boolean is_node = keySchema.getFields().size() == 1;
+    StringBuffer stringBuffer = new StringBuffer();
+
+    boolean firstColumn = true;
+    if (is_node) {
+      stringBuffer.append("MATCH (u:" + SQLUtils.cleanTableName(tableName) + ") WHERE ");
+      for (Schema.Field field: keySchema.getFields()) {
+        JDBCType correspondingType = getCorrespondingType(field);
+        if (correspondingType == null) {
+          // Skipped field.
+          throw new IllegalArgumentException(
+              "All types from the key schema must be supported, but field '" + field.name() + "' is of type: "
+                  + field.schema().getType());
+        }
+        stringBuffer.append("u." + SQLUtils.cleanColumnName(field.name()));
+        stringBuffer.append(" = ? ");
+      }
+      stringBuffer.append("DETACH DELETE u;");
+    } else {
+      String from_label = null;
+      String to_label = null;
+      String from_key = null;
+      String to_key = null;
+
+      int index = 0;
+      for (Schema.Field field: keySchema.getFields()) {
+        JDBCType correspondingType = getCorrespondingType(field);
+        if (correspondingType == null) {
+          // Skipped field.
+          throw new IllegalArgumentException(
+              "All types from the key schema must be supported, but field '" + field.name() + "' is of type: "
+                  + field.schema().getType());
+        }
+        if (index == 0)
+          from_label = field.name();
+        else if (index == 1)
+          from_key = field.name();
+        else if (index == 2)
+          to_label = field.name();
+        else if (index == 3)
+          to_key = field.name();
+        else
+          throw new IllegalArgumentException("key schema has more than 4 fields, field '" + field.name() + " illegal");
+        index = index + 1;
+      }
+
+      // Example: MATCH (u:User)-[f:Follows]->(u1:User)
+      // WHERE u.name = 'Adam' AND u1.name = 'Karissa'
+      // DELETE f;
+      stringBuffer.append(
+          "MATCH (u:" + from_label + ")-[f:" + SQLUtils.cleanTableName(tableName) + "]->(u1:" + to_label + ") ");
+      stringBuffer.append("WHERE u." + from_key + "= ? AND u1." + to_key + "= ? ");
+      stringBuffer.append("DELETE f;");
+    }
 
     return stringBuffer.toString();
   }

@@ -76,4 +76,6 @@ include 'tests:venice-pulsar-test'
 include 'all-modules'
 include 'integrations:venice-kuzudb'
 findProject(':integrations:venice-kuzudb')?.name = 'venice-kuzudb'
+include 'integrations:venice-neo4j'
+findProject(':integrations:venice-neo4j')?.name = 'venice-neo4j'
 

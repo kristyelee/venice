@@ -10,11 +10,8 @@ repositories {
 }
 
 dependencies {
-//    api libraries.kuzudb
-
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-//    implementation 'com.kuzudb:kuzu:0.9.0'
 }
 
 test {
