@@ -32,11 +32,11 @@ import com.linkedin.venice.kafka.protocol.enums.MessageType;
 import com.linkedin.venice.message.KafkaKey;
 import com.linkedin.venice.meta.ReadOnlyStoreRepository;
 import com.linkedin.venice.pubsub.PubSubConsumerAdapterFactory;
+import com.linkedin.venice.pubsub.PubSubProducerAdapterContext;
 import com.linkedin.venice.pubsub.PubSubTopicPartitionImpl;
 import com.linkedin.venice.pubsub.PubSubTopicRepository;
 import com.linkedin.venice.pubsub.api.PubSubMessageDeserializer;
 import com.linkedin.venice.pubsub.api.PubSubProducerAdapter;
-import com.linkedin.venice.pubsub.api.PubSubProducerAdapterContext;
 import com.linkedin.venice.pubsub.api.PubSubTopic;
 import com.linkedin.venice.pubsub.api.PubSubTopicPartition;
 import com.linkedin.venice.pubsub.manager.TopicManager;
@@ -145,8 +145,9 @@ public class KafkaConsumptionTest {
     remotePubSubBroker.close();
   }
 
-  @Test(dataProvider = "True-and-False", dataProviderClass = DataProviderUtils.class, timeOut = 10 * Time.MS_PER_SECOND)
-  public void testLocalAndRemoteConsumption(boolean isTopicWiseSharedConsumerAssignmentStrategy)
+  @Test(dataProvider = "sharedConsumerStrategy", dataProviderClass = DataProviderUtils.class, timeOut = 10
+      * Time.MS_PER_SECOND)
+  public void testLocalAndRemoteConsumption(KafkaConsumerService.ConsumerAssignmentStrategy sharedConsumerStrategy)
       throws ExecutionException, InterruptedException {
     // Prepare Aggregate Kafka Consumer Service.
     IngestionThrottler mockIngestionThrottler = mock(IngestionThrottler.class);
@@ -162,15 +163,7 @@ public class KafkaConsumptionTest {
     doReturn(true).when(veniceServerConfig).isLiveConfigBasedKafkaThrottlingEnabled();
     doReturn(KafkaConsumerServiceDelegator.ConsumerPoolStrategyType.DEFAULT).when(veniceServerConfig)
         .getConsumerPoolStrategyType();
-    if (isTopicWiseSharedConsumerAssignmentStrategy) {
-      doReturn(KafkaConsumerService.ConsumerAssignmentStrategy.TOPIC_WISE_SHARED_CONSUMER_ASSIGNMENT_STRATEGY)
-          .when(veniceServerConfig)
-          .getSharedConsumerAssignmentStrategy();
-    } else {
-      doReturn(KafkaConsumerService.ConsumerAssignmentStrategy.PARTITION_WISE_SHARED_CONSUMER_ASSIGNMENT_STRATEGY)
-          .when(veniceServerConfig)
-          .getSharedConsumerAssignmentStrategy();
-    }
+    doReturn(sharedConsumerStrategy).when(veniceServerConfig).getSharedConsumerAssignmentStrategy();
 
     String localKafkaUrl = localPubSubBroker.getAddress();
     String remoteKafkaUrl = remotePubSubBroker.getAddress();

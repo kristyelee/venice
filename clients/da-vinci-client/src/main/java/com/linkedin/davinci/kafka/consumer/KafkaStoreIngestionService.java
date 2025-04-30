@@ -60,7 +60,6 @@ import com.linkedin.venice.pubsub.PubSubProducerAdapterFactory;
 import com.linkedin.venice.pubsub.PubSubTopicPartitionImpl;
 import com.linkedin.venice.pubsub.PubSubTopicRepository;
 import com.linkedin.venice.pubsub.adapter.kafka.ApacheKafkaUtils;
-import com.linkedin.venice.pubsub.adapter.kafka.producer.ApacheKafkaProducerConfig;
 import com.linkedin.venice.pubsub.api.PubSubMessageDeserializer;
 import com.linkedin.venice.pubsub.api.PubSubSecurityProtocol;
 import com.linkedin.venice.pubsub.api.PubSubTopic;
@@ -204,6 +203,8 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
 
   private final ScheduledExecutorService idleStoreIngestionTaskKillerExecutor;
 
+  private final VeniceWriterFactory veniceWriterFactory;
+
   public KafkaStoreIngestionService(
       StorageService storageService,
       VeniceConfigLoader veniceConfigLoader,
@@ -248,8 +249,11 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
 
     veniceWriterProperties.put(PubSubConstants.PUBSUB_PRODUCER_USE_HIGH_THROUGHPUT_DEFAULTS, "true");
     producerAdapterFactory = pubSubClientsFactory.getProducerAdapterFactory();
-    VeniceWriterFactory veniceWriterFactory =
-        new VeniceWriterFactory(veniceWriterProperties, producerAdapterFactory, metricsRepository);
+    this.veniceWriterFactory = new VeniceWriterFactory(
+        veniceWriterProperties,
+        producerAdapterFactory,
+        metricsRepository,
+        serverConfig.getPubSubPositionTypeRegistry());
     this.adaptiveThrottlerSignalService = adaptiveThrottlerSignalService;
     this.ingestionThrottler = new IngestionThrottler(
         isDaVinciClient,
@@ -444,7 +448,7 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
      */
     DiskUsage diskUsage = new DiskUsage(serverConfig.getDataBasePath(), serverConfig.getDiskFullThreshold());
 
-    VeniceViewWriterFactory viewWriterFactory = new VeniceViewWriterFactory(veniceConfigLoader);
+    VeniceViewWriterFactory viewWriterFactory = new VeniceViewWriterFactory(veniceConfigLoader, veniceWriterFactory);
 
     if (serverConfig.isAAWCWorkloadParallelProcessingEnabled()) {
       this.aaWCWorkLoadProcessingThreadPool = Executors.newFixedThreadPool(
@@ -838,6 +842,11 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
     return veniceConfigLoader;
   }
 
+  @Override
+  public VeniceWriterFactory getVeniceWriterFactory() {
+    return veniceWriterFactory;
+  }
+
   /**
    * Find the task that matches both the storeName and maximumVersion number, enable metrics emission for this task and
    * update ingestion stats with this task; disable metric emission for all the task that doesn't max version.
@@ -1198,8 +1207,6 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
    */
   private Properties getCommonKafkaConsumerProperties(VeniceServerConfig serverConfig) {
     Properties kafkaConsumerProperties = serverConfig.getClusterProperties().getPropertiesCopy();
-    ApacheKafkaProducerConfig
-        .copyKafkaSASLProperties(serverConfig.getClusterProperties(), kafkaConsumerProperties, false);
     kafkaConsumerProperties.setProperty(KAFKA_BOOTSTRAP_SERVERS, serverConfig.getKafkaBootstrapServers());
     kafkaConsumerProperties.setProperty(KAFKA_AUTO_OFFSET_RESET_CONFIG, "earliest");
     // Venice is persisting offset in local offset db.
@@ -1239,9 +1246,7 @@ public class KafkaStoreIngestionService extends AbstractVeniceService implements
           new VeniceServerConfig(new VeniceProperties(clonedProperties), serverConfig.getKafkaClusterMap());
     }
 
-    VeniceProperties clusterProperties = serverConfigForPubSubCluster.getClusterProperties();
     Properties properties = serverConfigForPubSubCluster.getClusterProperties().getPropertiesCopy();
-    ApacheKafkaProducerConfig.copyKafkaSASLProperties(clusterProperties, properties, false);
     kafkaBootstrapUrls = serverConfigForPubSubCluster.getKafkaBootstrapServers();
     String resolvedKafkaUrl = serverConfigForPubSubCluster.getKafkaClusterUrlResolver().apply(kafkaBootstrapUrls);
     if (resolvedKafkaUrl != null) {

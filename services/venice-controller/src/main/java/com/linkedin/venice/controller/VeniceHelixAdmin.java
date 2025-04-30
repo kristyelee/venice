@@ -162,11 +162,10 @@ import com.linkedin.venice.participant.protocol.ParticipantMessageValue;
 import com.linkedin.venice.participant.protocol.enums.ParticipantMessageType;
 import com.linkedin.venice.persona.StoragePersona;
 import com.linkedin.venice.pubsub.PubSubClientsFactory;
-import com.linkedin.venice.pubsub.PubSubConsumerAdapterFactory;
+import com.linkedin.venice.pubsub.PubSubPositionTypeRegistry;
 import com.linkedin.venice.pubsub.PubSubTopicConfiguration;
 import com.linkedin.venice.pubsub.PubSubTopicRepository;
 import com.linkedin.venice.pubsub.adapter.kafka.ApacheKafkaUtils;
-import com.linkedin.venice.pubsub.adapter.kafka.producer.ApacheKafkaProducerConfig;
 import com.linkedin.venice.pubsub.api.PubSubTopic;
 import com.linkedin.venice.pubsub.api.exceptions.PubSubOpTimeoutException;
 import com.linkedin.venice.pubsub.api.exceptions.PubSubTopicDoesNotExistException;
@@ -385,11 +384,9 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
   private final long deprecatedJobTopicMaxRetentionMs;
   private final HelixReadOnlyStoreConfigRepository storeConfigRepo;
   private final VeniceWriterFactory veniceWriterFactory;
-  private final PubSubConsumerAdapterFactory pubSubConsumerAdapterFactory;
   private final int minNumberOfStoreVersionsToPreserve;
   private final StoreGraveyard storeGraveyard;
   private final Map<String, String> participantMessageStoreRTTMap;
-  private final Map<String, VeniceWriter> participantMessageWriterMap;
   private final boolean isControllerClusterHAAS;
   private final String coloLeaderClusterName;
   private final Optional<SSLFactory> sslFactory;
@@ -467,7 +464,8 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
       MetricsRepository metricsRepository,
       D2Client d2Client,
       PubSubTopicRepository pubSubTopicRepository,
-      PubSubClientsFactory pubSubClientsFactory) {
+      PubSubClientsFactory pubSubClientsFactory,
+      PubSubPositionTypeRegistry pubSubPositionTypeRegistry) {
     this(
         multiClusterConfigs,
         metricsRepository,
@@ -478,6 +476,7 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
         Optional.empty(),
         pubSubTopicRepository,
         pubSubClientsFactory,
+        pubSubPositionTypeRegistry,
         Collections.EMPTY_LIST);
   }
 
@@ -492,6 +491,7 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
       Optional<ICProvider> icProvider,
       PubSubTopicRepository pubSubTopicRepository,
       PubSubClientsFactory pubSubClientsFactory,
+      PubSubPositionTypeRegistry pubSubPositionTypeRegistry,
       List<ClusterLeaderInitializationRoutine> additionalInitRoutines) {
     Validate.notNull(d2Client);
     this.multiClusterConfigs = multiClusterConfigs;
@@ -549,14 +549,12 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     this.zkClient.subscribeStateChanges(new ZkClientStatusStats(metricsRepository, "controller-zk-client"));
     this.adapterSerializer = new HelixAdapterSerializer();
 
-    this.pubSubConsumerAdapterFactory = pubSubClientsFactory.getConsumerAdapterFactory();
-
     TopicManagerContext topicManagerContext =
         new TopicManagerContext.Builder().setPubSubTopicRepository(pubSubTopicRepository)
             .setMetricsRepository(metricsRepository)
             .setPubSubPropertiesSupplier(this::getPubSubSSLPropertiesFromControllerConfig)
             .setPubSubAdminAdapterFactory(pubSubClientsFactory.getAdminAdapterFactory())
-            .setPubSubConsumerAdapterFactory(pubSubConsumerAdapterFactory)
+            .setPubSubConsumerAdapterFactory(pubSubClientsFactory.getConsumerAdapterFactory())
             .setTopicMetadataFetcherConsumerPoolSize(commonConfig.getTopicManagerMetadataFetcherConsumerPoolSize())
             .setTopicMetadataFetcherThreadPoolSize(commonConfig.getTopicManagerMetadataFetcherThreadPoolSize())
             .build();
@@ -568,17 +566,17 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     this.storeConfigRepo = new HelixReadOnlyStoreConfigRepository(zkClient, adapterSerializer);
     storeConfigRepo.refresh();
     this.storeGraveyard = new HelixStoreGraveyard(zkClient, adapterSerializer, multiClusterConfigs.getClusters());
-    veniceWriterFactory = new VeniceWriterFactory(
+    this.veniceWriterFactory = new VeniceWriterFactory(
         commonConfig.getProps().toProperties(),
         pubSubClientsFactory.getProducerAdapterFactory(),
-        metricsRepository);
+        metricsRepository,
+        pubSubPositionTypeRegistry);
     this.realTimeTopicSwitcher = new RealTimeTopicSwitcher(
         topicManagerRepository.getLocalTopicManager(),
         veniceWriterFactory,
         commonConfig.getProps(),
         pubSubTopicRepository);
     this.participantMessageStoreRTTMap = new VeniceConcurrentHashMap<>();
-    this.participantMessageWriterMap = new VeniceConcurrentHashMap<>();
     isControllerClusterHAAS = commonConfig.isControllerClusterLeaderHAAS();
     coloLeaderClusterName = commonConfig.getClusterName();
     pushJobStatusStoreClusterName = commonConfig.getPushJobStatusStoreClusterName();
@@ -795,7 +793,6 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     }
     controllerConfig = new VeniceControllerClusterConfig(new VeniceProperties(clonedProperties));
     Properties properties = multiClusterConfigs.getCommonConfig().getProps().getPropertiesCopy();
-    ApacheKafkaProducerConfig.copyKafkaSASLProperties(originalPros, properties, false);
     if (ApacheKafkaUtils.isKafkaSSLProtocol(controllerConfig.getKafkaSecurityProtocol())) {
       Optional<SSLConfig> sslConfig = controllerConfig.getSslConfig();
       if (!sslConfig.isPresent()) {
@@ -6573,6 +6570,7 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
   @Override
   public void stopVeniceController() {
     try {
+      controllerStateModelFactory.close();
       helixManager.disconnect();
       topicManagerRepository.close();
       zkClient.close();
@@ -7880,14 +7878,6 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     return veniceWriterFactory;
   }
 
-  /**
-   * @return a <code>PubSubClientFactory</code> object used by the Venice controller to create Pubsub clients.
-   */
-  @Override
-  public PubSubConsumerAdapterFactory getPubSubConsumerAdapterFactory() {
-    return pubSubConsumerAdapterFactory;
-  }
-
   @Override
   public VeniceProperties getPubSubSSLProperties(String pubSubBrokerAddress) {
     return this.getPubSubSSLPropertiesFromControllerConfig(pubSubBrokerAddress);
@@ -7941,8 +7931,6 @@ public class VeniceHelixAdmin implements Admin, StoreCleaner {
     zkClient.close();
     jobTrackingVeniceWriterMap.forEach((k, v) -> Utils.closeQuietlyWithErrorLogged(v));
     jobTrackingVeniceWriterMap.clear();
-    participantMessageWriterMap.forEach((k, v) -> Utils.closeQuietlyWithErrorLogged(v));
-    participantMessageWriterMap.clear();
     dataRecoveryManager.close();
     participantStoreClientsManager.close();
     Utils.closeQuietlyWithErrorLogged(topicManagerRepository);
