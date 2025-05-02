@@ -45,6 +45,7 @@ def grpcVersion = '1.49.2'
 def kafkaGroup = 'org.apache.kafka' // 'com.linkedin.kafka'
 def kafkaVersion = '2.4.1' // '2.4.1.65'
 def log4j2Version = '2.17.1'
+def neo4jVersion = '2025.04.0'
 def pegasusVersion = '29.31.0'
 def protobufVersion = '3.21.7'
 def jacksonVersion = '2.15.0'
@@ -118,6 +119,7 @@ ext.libraries = [
     mapreduceClientCore: "org.apache.hadoop:hadoop-mapreduce-client-core:${hadoopVersion}",
     mapreduceClientJobClient: "org.apache.hadoop:hadoop-mapreduce-client-jobclient:${hadoopVersion}",
     mockito: 'org.mockito:mockito-core:4.11.0',
+        neo4j: "org.neo4j:neo4j:${neo4jVersion}",
     netty: 'io.netty:netty-all:4.1.74.Final',
     opentelemetryApi: "io.opentelemetry:opentelemetry-api:${openTelemetryVersion}",
     opentelemetrySdk: "io.opentelemetry:opentelemetry-sdk:${openTelemetryVersion}",
