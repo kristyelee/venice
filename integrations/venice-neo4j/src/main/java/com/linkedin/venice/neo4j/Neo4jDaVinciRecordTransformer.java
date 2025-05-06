@@ -3,9 +3,9 @@ package com.linkedin.venice.neo4j;
 import com.linkedin.davinci.client.DaVinciRecordTransformer;
 import com.linkedin.davinci.client.DaVinciRecordTransformerConfig;
 import com.linkedin.davinci.client.DaVinciRecordTransformerResult;
+import com.linkedin.venice.cypher.AvroToCypher;
+import com.linkedin.venice.cypher.PreparedStatementProcessor;
 import com.linkedin.venice.exceptions.VeniceException;
-import com.linkedin.venice.sql.AvroToSQL;
-import com.linkedin.venice.sql.PreparedStatementProcessor;
 import com.linkedin.venice.utils.concurrent.CloseableThreadLocal;
 import com.linkedin.venice.utils.lazy.Lazy;
 import java.sql.Connection;
@@ -49,8 +49,9 @@ public class Neo4jDaVinciRecordTransformer
     this.versionTableName = buildStoreNameWithVersion(storeVersion);
     this.neo4jUrl = "jdbc:neo4j:" + baseDir + "/" + neo4jFilePath;
     this.columnsToProject = columnsToProject;
-    String deleteStatement = AvroToSQL.deleteStatement(versionTableName, keySchema);
-    String upsertStatement = AvroToSQL.upsertStatement(versionTableName, keySchema, inputValueSchema, columnsToProject);
+    String deleteStatement = AvroToCypher.deleteStatement(versionTableName, keySchema);
+    String upsertStatement =
+        AvroToCypher.upsertStatement(versionTableName, keySchema, inputValueSchema, columnsToProject);
 
     try {
       Class.forName("org.neo4j.jdbc.Neo4jDriver");
@@ -79,8 +80,8 @@ public class Neo4jDaVinciRecordTransformer
         throw new VeniceException("Failed to create PreparedStatement for: " + upsertStatement, e);
       }
     });
-    this.upsertProcessor = AvroToSQL.upsertProcessor(keySchema, inputValueSchema, columnsToProject);
-    this.deleteProcessor = AvroToSQL.deleteProcessor(keySchema);
+    this.upsertProcessor = AvroToCypher.upsertProcessor(keySchema, inputValueSchema, columnsToProject);
+    this.deleteProcessor = AvroToCypher.deleteProcessor(keySchema);
   }
 
   @Override
@@ -95,12 +96,12 @@ public class Neo4jDaVinciRecordTransformer
 
   @Override
   public void processPut(Lazy<GenericRecord> key, Lazy<GenericRecord> value, int partitionId) {
-    // this.upsertProcessor.process(key.get(), value.get(), this.upsertPreparedStatement.get());
+    this.upsertProcessor.process(key.get(), value.get(), this.upsertPreparedStatement.get());
   }
 
   @Override
   public void processDelete(Lazy<GenericRecord> key, int partitionId) {
-    // this.deleteProcessor.process(key.get(), null, this.deletePreparedStatement.get());
+    this.deleteProcessor.process(key.get(), null, this.deletePreparedStatement.get());
   }
 
   public String buildStoreNameWithVersion(int version) {

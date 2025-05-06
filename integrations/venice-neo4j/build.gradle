@@ -6,25 +6,15 @@ configurations {
     integrationTestImplementation.extendsFrom testImplementation
 }
 
-def neo4jVersion = "5.16.0"
+def neo4jVersion = "3.5.35"
 group = 'com.linkedin.venice'
 version = 'unspecified'
-
-repositories {
-    mavenCentral()
-}
 
 dependencies {
     api libraries.avro
     api libraries.avroUtilCompatHelper
     api libraries.neo4j
-    api libraries.duckdbJdbc
     api libraries.log4j2api
-
-   // testImplementation platform('org.junit:junit-bom:5.10.0')
-    //testImplementation 'org.junit.jupiter:junit-jupiter'
-
-    implementation "org.neo4j:neo4j:${neo4jVersion}"
 
     api project(':clients:da-vinci-client')
     api project(':internal:venice-client-common')

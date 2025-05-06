@@ -12,7 +12,7 @@ import org.apache.avro.Schema;
  *
  * Initially, this implementation may have a DuckDB slant, though in the long-run it should ideally be vendor-neutral.
  */
-public class AvroToSQL {
+public class AvroToCypher {
   public enum UnsupportedTypeHandling {
     FAIL, SKIP;
   }
@@ -42,7 +42,7 @@ public class AvroToSQL {
     AVRO_TO_JDBC_TYPE_MAPPING = Collections.unmodifiableMap(avroToJdbc);
   }
 
-  private AvroToSQL() {
+  private AvroToCypher() {
     /**
      * Static util.
      *

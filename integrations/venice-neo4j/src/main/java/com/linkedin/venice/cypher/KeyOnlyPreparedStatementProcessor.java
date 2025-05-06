@@ -63,7 +63,7 @@ public class KeyOnlyPreparedStatementProcessor implements PreparedStatementProce
       @Nonnull JDBCType[] avroFieldIndexToCorrespondingType,
       @Nonnull Set<String> columnsToProject) {
     for (Schema.Field field: schema.getFields()) {
-      JDBCType correspondingType = AvroToSQL.getCorrespondingType(field);
+      JDBCType correspondingType = AvroToCypher.getCorrespondingType(field);
       if (correspondingType == null) {
         // Skipped field.
         continue;
