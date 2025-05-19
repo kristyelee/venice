@@ -56,7 +56,7 @@ public class TableDefinition {
   }
 
   @Nonnull
-  ColumnDefinition getColumnByJdbcIndex(int index) {
+  public ColumnDefinition getColumnByJdbcIndex(int index) {
     if (index < 1 || index > this.columns.size()) {
       throw new IndexOutOfBoundsException("Invalid index. The valid range is: 1.." + this.columns.size());
     }
@@ -64,7 +64,7 @@ public class TableDefinition {
   }
 
   @Nullable
-  ColumnDefinition getColumnByName(@Nonnull String columnName) {
+  public ColumnDefinition getColumnByName(@Nonnull String columnName) {
     Objects.requireNonNull(columnName);
     for (int i = 0; i < this.columns.size(); i++) {
       ColumnDefinition columnDefinition = this.columns.get(i);

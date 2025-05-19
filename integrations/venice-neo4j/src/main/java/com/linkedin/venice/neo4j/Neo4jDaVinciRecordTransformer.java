@@ -12,6 +12,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Set;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -23,8 +24,8 @@ public class Neo4jDaVinciRecordTransformer
     extends DaVinciRecordTransformer<GenericRecord, GenericRecord, GenericRecord> {
   private static final Logger LOGGER = LogManager.getLogger(Neo4jDaVinciRecordTransformer.class);
   private static final String neo4jFilePath = "my_database.neo4j";
-  private static final String createViewStatementTemplate = "";
-  private static final String dropTableStatementTemplate = "";
+  private static final String createViewStatementTemplate = "MATCH (n:%s) return n";
+  private static final String dropTableStatementTemplate = "MATCH (n:%s) DETACH DELETE n";
   private final String storeNameWithoutVersionInfo;
   private final String versionTableName;
   private final String neo4jUrl;
@@ -49,9 +50,9 @@ public class Neo4jDaVinciRecordTransformer
     this.versionTableName = buildStoreNameWithVersion(storeVersion);
     this.neo4jUrl = "jdbc:neo4j:" + baseDir + "/" + neo4jFilePath;
     this.columnsToProject = columnsToProject;
-    String deleteStatement = AvroToCypher.deleteStatement(versionTableName, keySchema);
+    String deleteStatement = AvroToCypher.deleteStatementInCypher(versionTableName, keySchema);
     String upsertStatement =
-        AvroToCypher.upsertStatement(versionTableName, keySchema, inputValueSchema, columnsToProject);
+        AvroToCypher.upsertStatementInCypher(versionTableName, keySchema, inputValueSchema, columnsToProject);
 
     try {
       Class.forName("org.neo4j.jdbc.Neo4jDriver");
@@ -102,6 +103,43 @@ public class Neo4jDaVinciRecordTransformer
   @Override
   public void processDelete(Lazy<GenericRecord> key, int partitionId) {
     this.deleteProcessor.process(key.get(), null, this.deletePreparedStatement.get());
+  }
+
+  @Override
+  public void onStartVersionIngestion(boolean isCurrentVersion) {
+    try (Connection connection = DriverManager.getConnection(neo4jUrl); Statement stmt = connection.createStatement()) {
+
+      if (isCurrentVersion) {
+        // Unable to convert to prepared statement as table and column names can't be parameterized
+        String createViewStatement =
+            String.format(createViewStatementTemplate, storeNameWithoutVersionInfo, versionTableName);
+        stmt.execute(createViewStatement);
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public void onEndVersionIngestion(int currentVersion) {
+    try (Connection connection = DriverManager.getConnection(neo4jUrl); Statement stmt = connection.createStatement()) {
+      // Swap to current version
+      String currentVersionTableName = buildStoreNameWithVersion(currentVersion);
+      String createViewStatement =
+          String.format(createViewStatementTemplate, storeNameWithoutVersionInfo, currentVersionTableName);
+      stmt.execute(createViewStatement);
+
+      if (currentVersion != getStoreVersion()) {
+        // Only drop non-current versions, e.g., the backup version getting retired.
+
+        // Unable to convert to prepared statement as table and column names can't be parameterized
+        // Drop DuckDB table for storeVersion as it's retired
+        String dropTableStatement = String.format(dropTableStatementTemplate, versionTableName);
+        stmt.execute(dropTableStatement);
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public String buildStoreNameWithVersion(int version) {

@@ -8,7 +8,7 @@ import org.apache.avro.Schema;
 
 
 /**
- * Utility intended to convert Avro -> SQL, including DDL and DML statements.
+ * Utility intended to convert Avro -> Cypher, including DDL and DML statements.
  *
  * Initially, this implementation may have a DuckDB slant, though in the long-run it should ideally be vendor-neutral.
  */
@@ -47,9 +47,7 @@ public class AvroToCypher {
      * Static util.
      *
      * N.B.: For now, this is fine. But later on, we may want to specialize some of the behavior for different DB
-     * vendors (e.g., to support both DuckDB and SQLite, or even others). At that point, we would likely want to
-     * leverage subclasses, and therefore it may be cleaner to make this class abstract and instantiable. That is
-     * fine, we'll cross that bridge when we get to it.
+     * vendors for Neo4j.
      */
   }
 
@@ -136,6 +134,7 @@ public class AvroToCypher {
 
     Set<Schema.Field> allColumns = combineColumns(keySchema, valueSchema, columnsToProject);
     StringBuffer stringBuffer = new StringBuffer();
+    String tableNameBuffer = SQLUtils.cleanTableName(tableName);
 
     if (is_node) {
       // MERGE (n:User {name : 'Adam'}) SET n.age = 35
@@ -143,14 +142,10 @@ public class AvroToCypher {
       boolean firstColumn = true;
       for (Schema.Field field: allColumns) {
         JDBCType correspondingType = getCorrespondingType(field);
-        if (correspondingType == null) {
-          // Skipped field.
-          continue;
-        }
 
         if (firstColumn) {
           // MERGE (n:User {name : 'Adam'})
-          stringBuffer.append("MERGE (n: " + SQLUtils.cleanTableName(tableName) + " { " + field.name() + ": ? }) ");
+          stringBuffer.append("MERGE (n: " + tableNameBuffer + " { " + field.name() + ": ? }) ");
           firstColumn = false;
         } else {
           // SET n.age = 35
@@ -162,6 +157,21 @@ public class AvroToCypher {
       // MATCH (a:User), (b:User)
       // WHERE a.name = 'Adam' AND b.name = 'Zhang'
       // MERGE (a)-[e:Follows]->(b) SET e.since = 2022;
+
+      boolean firstColumn = true;
+      stringBuffer.append("MATCH (a: " + tableNameBuffer + "), " + "(b: " + tableNameBuffer + ")");
+
+      for (Schema.Field field: allColumns) {
+        if (firstColumn) {
+          stringBuffer.append("WHERE: a." + field.name() + " = ?" + " AND b." + field.name() + " = ?");
+          firstColumn = false;
+        } else {
+          // MERGE
+          stringBuffer
+              .append("MERGE (a)-[e:" + SQLUtils.cleanTableName(tableName) + "]->(b) SET e." + field.name() + " = ?;");
+        }
+      }
+
     }
 
     return stringBuffer.toString();

@@ -2,6 +2,10 @@ package com.linkedin.venice.sql;
 
 import static org.testng.Assert.*;
 
+import com.linkedin.venice.cypher.ColumnDefinition;
+import com.linkedin.venice.cypher.IndexType;
+import com.linkedin.venice.cypher.SQLUtils;
+import com.linkedin.venice.cypher.TableDefinition;
 import java.sql.Connection;
 import java.sql.JDBCType;
 import java.sql.SQLException;
